@@ -1,17 +1,17 @@
 use mysql_async::prelude::Query;
 use mysql_async::{Opts, OptsBuilder};
 
-use crate::mysql::error_helper::ErrorHelper;
+use crate::mysql_like::error_helper::ErrorHelper;
 
 /// The capability to request cancellation of in-progress queries on a
 /// connection.
 #[derive(Clone)]
-pub struct MysqlCancelToken {
+pub struct MysqlLikeCancelToken {
     pub(crate) opts: Opts,
     pub(crate) kill_id: u32,
 }
 
-impl MysqlCancelToken {
+impl MysqlLikeCancelToken {
     /// Attempts to cancel the in-progress query on the connection associated
     /// with this `CancelToken`.
     ///

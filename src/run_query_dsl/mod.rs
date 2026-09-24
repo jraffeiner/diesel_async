@@ -6,7 +6,12 @@ use diesel::query_builder::IntoUpdateTarget;
 use diesel::result::QueryResult;
 use diesel::AsChangeset;
 use futures_core::future::BoxFuture;
-#[cfg(any(feature = "mysql", feature = "postgres", feature = "sqlite"))]
+#[cfg(any(
+    feature = "mysql",
+    feature = "mariadb",
+    feature = "postgres",
+    feature = "sqlite"
+))]
 use futures_util::FutureExt;
 use futures_util::{stream, StreamExt, TryStreamExt};
 use std::future::Future;
@@ -712,6 +717,47 @@ where
     Tab::FromClause: Send,
     diesel::dsl::Find<Changes::Table, Changes::Id>: methods::LoadQuery<'b, crate::AsyncMysqlConnection, Output>
         + RunQueryDsl<crate::AsyncMysqlConnection>
+        + Send,
+{
+    fn update_and_fetch<'conn, 'changes>(
+        &'conn mut self,
+        changeset: Changes,
+    ) -> BoxFuture<'changes, QueryResult<Output>>
+    where
+        Changes: 'changes,
+        Changes::Changeset: 'changes,
+        'conn: 'changes,
+        Self: 'changes,
+    {
+        async move {
+            diesel::update(changeset)
+                .set(changeset)
+                .execute(self)
+                .await?;
+            Changes::table().find(changeset.id()).get_result(self).await
+        }
+        .boxed()
+    }
+}
+
+#[cfg(feature = "mariadb")]
+impl<'b, Changes, Output, Tab, V> UpdateAndFetchResults<Changes, Output>
+    for crate::AsyncMariadbConnection
+where
+    Output: Send + 'static,
+    Changes:
+        Copy + AsChangeset<Target = Tab> + Send + diesel::associations::Identifiable<Table = Tab>,
+    Tab: diesel::Table + diesel::query_dsl::methods::FindDsl<Changes::Id> + 'b,
+    diesel::dsl::Find<Tab, Changes::Id>: IntoUpdateTarget<Table = Tab, WhereClause = V>,
+    diesel::query_builder::UpdateStatement<Tab, V, Changes::Changeset>:
+        diesel::query_builder::AsQuery,
+    diesel::dsl::Update<Changes, Changes>: methods::ExecuteDsl<Self>,
+    V: Send + 'b,
+    Changes::Changeset: Send + 'b,
+    Changes::Id: 'b,
+    Tab::FromClause: Send,
+    diesel::dsl::Find<Changes::Table, Changes::Id>: methods::LoadQuery<'b, crate::AsyncMariadbConnection, Output>
+        + RunQueryDsl<crate::AsyncMariadbConnection>
         + Send,
 {
     fn update_and_fetch<'conn, 'changes>(
